@@ -2,7 +2,7 @@
 #ifndef PICOPIXEL_LVGL_UI_FONTS_H
 #define PICOPIXEL_LVGL_UI_FONTS_H
 
-#include <lvgl/lvgl.h>
+#include <lvgl.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -2,7 +2,7 @@
 #ifndef PICOPIXEL_LVGL_UI_IMAGES_H
 #define PICOPIXEL_LVGL_UI_IMAGES_H
 
-#include <lvgl/lvgl.h>
+#include <lvgl.h>
 
 #ifdef __cplusplus
 extern "C" {

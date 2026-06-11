@@ -5,7 +5,6 @@
 #include <lvgl.h>
 #include <Arduino_GFX_Library.h>
 #include <VictronBLE.h> // Standalone BLE library
-#include "touch.h"
 
 #define TFT_BL 2
 
@@ -28,6 +27,9 @@ Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
     1 /* pclk_active_neg */, 16000000 /* prefer_speed */, true /* auto_flush */);
 #endif 
 
+// CRITICAL: touch.h must sit below the gfx definition block so it can read boundaries
+#include "touch.h"
+
 /* LVGL Engine Globals */
 static uint32_t screenWidth;
 static uint32_t screenHeight;
@@ -38,7 +40,7 @@ static lv_disp_drv_t disp_drv;
 /* --- VICTRON INTEGRATION ENGINE --- */
 VictronBLE victron;
 
-// Structure to pass data safely across processor cores
+// Structure to pass data safely between processor cores
 struct VictronSharedState {
     float voltage;
     float current;
@@ -48,25 +50,30 @@ struct VictronSharedState {
 };
 volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, false};
 
-// Temporary placeholder pointers for verifying the BLE incoming data stream
+// Text pointers for validating the data layer stream
 lv_obj_t *lbl_battery;
 lv_obj_t *lbl_solar;
 
-// Background Core 0 Callback: Executes when a matching encrypted payload is captured
+// Core 0 BLE Processing Callback
 void onVictronBleData(const VictronDevice* device) {
-    if (device->getType() == VICTRON_SMART_SHUNT) {
-        sharedMetrics.voltage   = device->getBatteryVoltage();
-        sharedMetrics.current   = device->getBatteryCurrent();
-        sharedMetrics.soc       = device->getSOC();
-        sharedMetrics.dataReady = true;
-    } else if (device->getType() == VICTRON_MPPT) {
-        sharedMetrics.power     = device->getSolarPower();
-        sharedMetrics.dataReady = true;
+    if (device->dataValid) {
+        // SmartShunt / BMV check uses the flat enum type identifier
+        if (device->deviceType == DEVICE_TYPE_BATTERY_MONITOR) { 
+            // Access fields straight through the flat struct mapping
+            sharedMetrics.voltage   = device->battery.voltage;
+            sharedMetrics.current   = device->battery.current;
+            sharedMetrics.soc       = device->battery.soc;
+            sharedMetrics.dataReady = true;
+        } 
+        // SmartSolar MPPT check
+        else if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) { 
+            sharedMetrics.power     = device->solar.panelPower;
+            sharedMetrics.dataReady = true;
+        }
     }
 }
 /* --------------------------------- */
 
-/* Display flushing */
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p)
 {
   uint32_t w = (area->x2 - area->x1 + 1);
@@ -81,21 +88,13 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
   lv_disp_flush_ready(disp);
 }
 
-/* Touch Input driver */
 void my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data)
 {
-  if (touch_has_signal())
+  if (touch_has_signal() && touch_touched())
   {
-    if (touch_touched())
-    {
-      data->state = LV_INDEV_STATE_PR;
-      data->point.x = touch_last_x;
-      data->point.y = touch_last_y;
-    }
-    else if (touch_released())
-    {
-      data->state = LV_INDEV_STATE_REL;
-    }
+    data->state = LV_INDEV_STATE_PR;
+    data->point.x = touch_last_x;
+    data->point.y = touch_last_y;
   }
   else
   {
@@ -118,12 +117,10 @@ void setup()
   ledcWrite(0, 255); 
 #endif
 
-  // Clear splash screens quickly
   gfx->fillScreen(BLACK);
-  
   lv_init();
 
-  // Init touch device
+  // Init touch hardware device
   pinMode(TOUCH_GT911_RST, OUTPUT);
   digitalWrite(TOUCH_GT911_RST, LOW);
   delay(10);
@@ -134,12 +131,7 @@ void setup()
   screenWidth = gfx->width();
   screenHeight = gfx->height();
 
-#ifdef ESP32
   disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-#else
-  disp_draw_buf = (lv_color_t *)malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4);
-#endif
-
   if (!disp_draw_buf)
   {
     Serial.println("LVGL Buffer Allocation Failed!");
@@ -163,24 +155,24 @@ void setup()
   indev_drv.read_cb = my_touchpad_read;
   lv_indev_drv_register(&indev_drv);
 
-  /* --- HACK IN YOUR CUSTOM UI / FILES HERE --- */
-  // If using an exported SquareLine studio framework, comment out the lines below and call:
-  // ui_init(); 
+  /* --- LINK YOUR CUSTOM UI FRAMEWORK HERE --- */
+  // If your exported UI file uses a initialization routine, call it right here:
+  // ui_init();
   
-  // Temporary placeholders for validation:
+  // Placeholder widgets for verification:
   lbl_battery = lv_label_create(lv_scr_act());
-  lv_obj_set_style_text_font(lbl_battery, &lv_font_montserrat_28, 0);
+  lv_obj_set_style_text_font(lbl_battery, &lv_font_montserrat_14, 0); 
   lv_obj_align(lbl_battery, LV_ALIGN_CENTER, 0, -50);
   lv_label_set_text(lbl_battery, "Waiting for SmartShunt BLE...");
 
   lbl_solar = lv_label_create(lv_scr_act());
-  lv_obj_set_style_text_font(lbl_solar, &lv_font_montserrat_28, 0);
+  lv_obj_set_style_text_font(lbl_solar, &lv_font_montserrat_14, 0); 
   lv_obj_align(lbl_solar, LV_ALIGN_CENTER, 0, 50);
   lv_label_set_text(lbl_solar, "Waiting for MPPT BLE...");
   /* ------------------------------------------- */
 
   /* --- INITIALIZE VICTRON DECRYPTION --- */
-  // Replace with your real Victron MAC addresses and extracted 32-character Hex AES keys
+  // Replace with your physical Victron MAC addresses and extracted 32-character Hex AES encryption keys
   victron.addDevice("SmartShunt", "aa:bb:cc:dd:ee:ff", "00112233445566778899aabbccddeeff");
   victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
   
@@ -194,20 +186,23 @@ void loop()
 {
   lv_timer_handler(); /* Let the GUI engine refresh objects */
   
-  // Thread-safely pipe the background data metrics to your active screen widgets
+  // Safe core translation interface
   static uint32_t lastWidgetRefresh = 0;
   if (millis() - lastWidgetRefresh > 1000) {
       if (sharedMetrics.dataReady) {
           
-          // --- HACK IN YOUR LVGL LABELS/METERS DATA RETRIEVAL HERE ---
-          // Replace these placeholder calls with your custom UI setters (e.g. lv_bar_set_value)
+          // --- HACK IN YOUR CUSTOM UI OBJECT REFRESHES HERE ---
+          // Examples to assign data directly to your UI layout objects:
+          // lv_label_set_text_fmt(ui_ShuntVoltsLabel, "%.2f V", sharedMetrics.voltage);
+          // lv_bar_set_value(ui_SocProgressBar, (int)sharedMetrics.soc, LV_ANIM_ON);
+          
           lv_label_set_text_fmt(lbl_battery, "Battery: %.2fV  |  %.2fA  |  %.1f%%", 
                                 sharedMetrics.voltage, sharedMetrics.current, sharedMetrics.soc);
                                 
           lv_label_set_text_fmt(lbl_solar, "Solar Production: %.0f Watts", 
                                 sharedMetrics.power);
           
-          sharedMetrics.dataReady = false; // reset transaction flag
+          sharedMetrics.dataReady = false; 
       }
       lastWidgetRefresh = millis();
   }

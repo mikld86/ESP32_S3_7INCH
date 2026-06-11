@@ -4,7 +4,6 @@
 #include "screens.h"
 #include "images.h"
 #include "fonts/fonts.h"
-#include "actions.h"
 #include "vars.h"
 #include "styles.h"
 #include "ui.h"
@@ -336,9 +335,7 @@ void create_screen_main() {
         }
     }
 
-    // Event callback registrations
-    lv_obj_add_flag(objects.solar_display, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_add_event_cb(objects.solar_display, solar_display_value-changed_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
 
     tick_screen_main();
 }
