@@ -1,14 +1,12 @@
 /*******************************************************************************
- * LVGL 7-Inch Waveshare Victron BLE Dashboard - Debug & Logging Version
+ * LVGL 7-Inch Waveshare Victron BLE Dashboard - Clean Native Hardware Version
+ * Preconfigured for Waveshare ESP32-S3-Touch-LCD-7 (800x480)
  ******************************************************************************/
 #include <lvgl.h>
 #include <Arduino_GFX_Library.h>
 #include <VictronBLE.h> 
-#include <Wire.h> // Required for direct IO expander debugging
 
-#define TFT_BL 2
-#define I2C_SDA_PIN 8
-#define I2C_SCL_PIN 9
+#define TFT_BL 2 // Native Backlight Pin for this 7" board layout
 
 #if defined(DISPLAY_DEV_KIT)
 Arduino_GFX *gfx = create_default_Arduino_GFX();
@@ -54,24 +52,19 @@ lv_obj_t *lbl_battery;
 lv_obj_t *lbl_solar;
 
 void onVictronBleData(const VictronDevice* device) {
-    Serial.printf("[BLE] Packet processed at device reference address: %p\n", device);
-    
     if (device->dataValid) {
         if (device->deviceType == DEVICE_TYPE_BATTERY_MONITOR) { 
             sharedMetrics.voltage   = device->battery.voltage;
             sharedMetrics.current   = device->battery.current;
             sharedMetrics.soc       = device->battery.soc;
             sharedMetrics.dataReady = true;
-            Serial.printf("[BLE DEBUG] Shunt updated: %.2fV, %.2fA, %.1f%%\n", 
-                          sharedMetrics.voltage, sharedMetrics.current, sharedMetrics.soc);
+            Serial.printf("[BLE] Shunt updated: %.2fV, %.2fA\n", sharedMetrics.voltage, sharedMetrics.current);
         } 
         else if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) { 
             sharedMetrics.power     = device->solar.panelPower;
             sharedMetrics.dataReady = true;
-            Serial.printf("[BLE DEBUG] MPPT updated: %.0fW\n", sharedMetrics.power);
+            Serial.printf("[BLE] MPPT updated: %.0fW\n", sharedMetrics.power);
         }
-    } else {
-        Serial.println("[BLE ERROR] Captured packet from target device, but decryption failed. Check your AES key!");
     }
 }
 /* --------------------------------- */
@@ -99,70 +92,44 @@ void my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
 
 void setup() {
     Serial.begin(115200);
-    delay(2000); // Give serial monitor time to connect
-    Serial.println("\n====================================");
-    Serial.println("[SYSTEM] Starting Waveshare 7-Inch Engine Debug...");
-    Serial.println("====================================");
+    delay(1000); 
+    Serial.println("\n[SYSTEM] Initializing Waveshare 7-Inch Display Setup...");
 
-    // 1. Force I2C initialization to wake up the board's power management
-    Serial.println("[HARDWARE] Activating I2C Bus for CH422G Expanders...");
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 400000U);
-
-    // 2. Clear CH422G shutdown state to power up screen backlight rails
-    Serial.println("[HARDWARE] Sending power-on command to CH422G (0x24)...");
-    Wire.beginTransmission(0x24); 
-    Wire.write(0x0E);             // Select output register
-    Wire.write(0xFF);             // Shift pins HIGH to open hardware gates
-    byte error = Wire.endTransmission();
-    
-    if (error == 0) {
-        Serial.println("[HARDWARE] CH422G Power Expansion Rail initialized successfully.");
-    } else {
-        Serial.printf("[HARDWARE ERROR] Failed to talk to CH422G. I2C Error code: %d\n", error);
-    }
-
-    // 3. Fire up the panel configuration (Fixed void check statement)
-    Serial.println("[HARDWARE] Launching Arduino_GFX Panel Matrix...");
-    gfx->begin(); 
-    Serial.println("[HARDWARE] GFX Controller initialized.");
-
-#ifdef TFT_BL
-    Serial.println("[HARDWARE] Setting up PWM Backlight timers on GPIO 2...");
+    // 1. Fire up Backlight natively via PWM on GPIO 2 (Stops I2C timeouts)
+    Serial.println("[HARDWARE] Powering up Backlight Rail natively (GPIO 2)...");
     pinMode(TFT_BL, OUTPUT);
     digitalWrite(TFT_BL, HIGH);
     ledcSetup(0, 300, 8);
     ledcAttachPin(TFT_BL, 0);
-    ledcWrite(0, 255); 
-#endif
+    ledcWrite(0, 255); // Force maximum brightness right away
 
-    Serial.println("[DISPLAY] Injecting test fills...");
-    gfx->fillScreen(RED); delay(200);
-    gfx->fillScreen(GREEN); delay(200);
-    gfx->fillScreen(BLUE); delay(200);
+    // 2. Launch the RGB Parallel Panel Driver matrix
+    Serial.println("[HARDWARE] Starting RGB Parallel Matrix configuration...");
+    gfx->begin(); 
+    Serial.println("[HARDWARE] GFX Controller initialized.");
+
+    // 3. Optional visual confirmation test
+    gfx->fillScreen(RED); delay(150);
+    gfx->fillScreen(GREEN); delay(150);
+    gfx->fillScreen(BLUE); delay(150);
     gfx->fillScreen(BLACK);
 
-    Serial.println("[SYSTEM] Initializing LVGL Framework...");
+    // 4. Fire up the layout framework engine
+    Serial.println("[SYSTEM] Starting LVGL graphics workspace...");
     lv_init();
 
-    Serial.println("[HARDWARE] Resetting and parsing GT911 Touch Controller...");
-    pinMode(TOUCH_GT911_RST, OUTPUT);
-    digitalWrite(TOUCH_GT911_RST, LOW);
-    delay(20);
-    digitalWrite(TOUCH_GT911_RST, HIGH);
-    delay(20);
+    // 5. Connect touch layers
     touch_init();
 
     screenWidth = gfx->width();
     screenHeight = gfx->height();
     Serial.printf("[DISPLAY] Resolution Reported: %dx%d\n", screenWidth, screenHeight);
 
-    Serial.println("[MEMORY] Allocating internal graphics memory workspace for LVGL...");
     disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) {
-        Serial.println("[CRITICAL ERROR] Internal graphics allocation failed! System halted.");
+        Serial.println("[CRITICAL ERROR] Internal framework graphics memory allocation failed!");
         while(1) delay(100);
     }
-    Serial.printf("[MEMORY] Free Heap: %d bytes\n", ESP.getFreeHeap());
 
     lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, screenWidth * screenHeight / 4);
 
@@ -179,6 +146,7 @@ void setup() {
     indev_drv.read_cb = my_touchpad_read;
     lv_indev_drv_register(&indev_drv);
 
+    // Generate diagnostic UI text elements
     lbl_battery = lv_label_create(lv_scr_act());
     lv_obj_set_style_text_font(lbl_battery, &lv_font_montserrat_14, 0); 
     lv_obj_align(lbl_battery, LV_ALIGN_CENTER, 0, -50);
@@ -189,16 +157,15 @@ void setup() {
     lv_obj_align(lbl_solar, LV_ALIGN_CENTER, 0, 50);
     lv_label_set_text(lbl_solar, "Waiting for MPPT BLE...");
 
-    // Insert your physical target setups here
-    Serial.println("[BLE] Registering hardware decryption parameters...");
+    // 6. Connect your background scanning infrastructure
+    Serial.println("[BLE] Registering target physical signatures...");
     victron.addDevice("SmartShunt", "aa:bb:cc:dd:ee:ff", "00112233445566778899aabbccddeeff");
     victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
     
     victron.setCallback(onVictronBleData);
-    Serial.println("[BLE] Launching background scanning processor task on Core 0...");
     victron.begin(); 
     
-    Serial.println("[SYSTEM] Setup completed successfully. Running layout processing loop.");
+    Serial.println("[SYSTEM] Framework Engine up and processing loops cleanly.");
 }
 
 void loop() {
