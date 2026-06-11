@@ -26,11 +26,13 @@ Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(
     14 /* B3 */, 38 /* B4 */, 18 /* B5 */, 17 /* B6 */, 10 /* B7 */  
 );
 
+// Standard Waveshare 7-Inch 800x480 Calibration Timings
 Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
     bus,
     800 /* width */, 0 /* hsync_polarity */, 210 /* hsync_front_porch */, 30 /* hsync_pulse_width */, 16 /* hsync_back_porch */,
     480 /* height */, 0 /* vsync_polarity */, 22 /* vsync_front_porch */, 13 /* vsync_pulse_width */, 10 /* vsync_back_porch */,
     1 /* pclk_active_neg */, 16000000 /* prefer_speed */, true /* auto_flush */);
+
 #endif 
 
 // Included AFTER gfx definition to prevent "not declared in this scope" macro compiler drops
@@ -109,17 +111,24 @@ void setup() {
     writeCH422GRegister(0x0E, 0xFF); 
     delay(100); 
 
+    // Initialize hardware first
     gfx->begin(); 
     gfx->fillScreen(BLACK);
 
-    victron.addDevice("SmartShunt", "aa:bb:cc:dd:ee:ff", "00112233445566778899aabbccddeeff");
+    // FIXED: Calculate screen variables AFTER gfx->begin() has finished booting the hardware
+    uint32_t screenWidth = gfx->width();
+    uint32_t screenHeight = gfx->height();
+
+    // Fallback protection: Force exact specifications if driver dimensions report 0 or garbage
+    if (screenWidth == 0 || screenWidth > 800) screenWidth = 800;
+    if (screenHeight == 0 || screenHeight > 480) screenHeight = 480;
+
+    victron.addDevice("SmartShunt", "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
     victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
     victron.setCallback(onVictronBleData);
     victron.begin(); 
 
-    uint32_t screenWidth = gfx->width();
-    uint32_t screenHeight = gfx->height();
-
+    // Buffer structure scales perfectly to the enforced boundaries
     lv_color_t *disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) { while(1) delay(100); }
 
@@ -151,7 +160,6 @@ void loop() {
     static uint32_t lastWidgetRefresh = 0;
     if (millis() - lastWidgetRefresh > 5000) { 
         
-        // Cache data safely using thread-isolated structural variables
         VictronSharedState snap;
         noInterrupts();
         snap.voltage = sharedMetrics.voltage;
@@ -162,7 +170,6 @@ void loop() {
         snap.mpptPacketsReceived  = sharedMetrics.mpptPacketsReceived;
         interrupts();
 
-        // Hoisted variables accessible by BOTH shunt and solar conditional blocks
         int wholeVolts = (int)snap.voltage;
         int milliVolts = (int)abs((int)((snap.voltage - wholeVolts) * 100));
 
@@ -172,12 +179,12 @@ void loop() {
             int milliAmps  = (int)abs((int)((snap.current - wholeAmps) * 100));
             int wholeSoc   = (int)snap.soc;
 
-            lv_label_set_text_fmt(objects.dcvoltsdisplay, "%d.%02d", wholeVolts, milliVolts);
+            lv_label_set_text_fmt(objects.loadsvoltsdisplay, "%d.%02d", wholeVolts, milliVolts);
             
             if (snap.current < 0.0f && wholeAmps == 0) {
-                lv_label_set_text_fmt(objects.dcamps, "-0.%02d", milliAmps);
+                lv_label_set_text_fmt(objects.loadamps, "-0.%02d", milliAmps);
             } else {
-                lv_label_set_text_fmt(objects.dcamps, "%d.%02d", wholeAmps, milliAmps);
+                lv_label_set_text_fmt(objects.loadamps, "%d.%02d", wholeAmps, milliAmps);
             }
 
             lv_label_set_text_fmt(objects.battery, "%d%%", wholeSoc);
@@ -195,8 +202,6 @@ void loop() {
                 int sAmpsMilli = (int)abs((int)((calculatedSolarAmps - sAmpsWhole) * 100));
                 
                 lv_label_set_text_fmt(objects.solaramps, "%d.%02d", sAmpsWhole, sAmpsMilli);
-                
-                // Now perfectly safe; wholeVolts and milliVolts exist in this block's outer scope!
                 lv_label_set_text_fmt(objects.solarvoltagevolts, "%d.%02d", wholeVolts, milliVolts);
             }
         }
