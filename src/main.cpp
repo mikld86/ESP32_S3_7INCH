@@ -1,23 +1,28 @@
 /*******************************************************************************
- * LVGL 7-Inch Waveshare Victron BLE Dashboard - Clean Native Hardware Version
- * Preconfigured for Waveshare ESP32-S3-Touch-LCD-7 (800x480)
+ * LVGL 7-Inch Waveshare Victron BLE Dashboard - Official Documentation Mapped
+ * Mapped to Waveshare ESP32-S3-Touch-LCD-7 (800x480) Shared I2C Architecture
  ******************************************************************************/
 #include <lvgl.h>
 #include <Arduino_GFX_Library.h>
 #include <VictronBLE.h> 
+#include <Wire.h>
 
-#define TFT_BL 2 // Native Backlight Pin for this 7" board layout
+// Onboard single I2C Bus layout shared by CH422G and GT911
+#define I2C_SDA_PIN 8
+#define I2C_SCL_PIN 9
+#define CH422G_I2C_ADDR 0x24
 
 #if defined(DISPLAY_DEV_KIT)
 Arduino_GFX *gfx = create_default_Arduino_GFX();
 #else 
 
+// Strictly mapped to official Waveshare RGB Parallel Pinout
 Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(
     GFX_NOT_DEFINED /* CS */, GFX_NOT_DEFINED /* SCK */, GFX_NOT_DEFINED /* SDA */,
-    41 /* DE */, 40 /* VSYNC */, 39 /* HSYNC */, 42 /* PCLK */,
-    14 /* R0 */, 21 /* R1 */, 47 /* R2 */, 48 /* R3 */, 45 /* R4 */,
-    9 /* G0 */, 46 /* G1 */, 3 /* G2 */, 8 /* G3 */, 16 /* G4 */, 1 /* G5 */,
-    15 /* B0 */, 7 /* B1 */, 6 /* B2 */, 5 /* B3 */, 4 /* B4 */
+    5  /* DE */,  3 /* VSYNC */, 46 /* HSYNC */, 7 /* PCLK */,
+    1  /* R3 */, 2  /* R4 */, 42 /* R5 */, 41 /* R6 */, 40 /* R7 */, // Red Data
+    39 /* G2 */, 0  /* G3 */, 45 /* G4 */, 48 /* G5 */, 47 /* G6 */, 21 /* G7 */, // Green Data
+    14 /* B3 */, 38 /* B4 */, 18 /* B5 */, 17 /* B6 */, 10 /* B7 */  // Blue Data
 );
 
 Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
@@ -29,7 +34,7 @@ Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
 
 #include "touch.h"
 
-/* LVGL Engine Globals */
+/* LVGL Framework Globals */
 static uint32_t screenWidth;
 static uint32_t screenHeight;
 static lv_disp_draw_buf_t draw_buf;
@@ -58,12 +63,10 @@ void onVictronBleData(const VictronDevice* device) {
             sharedMetrics.current   = device->battery.current;
             sharedMetrics.soc       = device->battery.soc;
             sharedMetrics.dataReady = true;
-            Serial.printf("[BLE] Shunt updated: %.2fV, %.2fA\n", sharedMetrics.voltage, sharedMetrics.current);
         } 
         else if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) { 
             sharedMetrics.power     = device->solar.panelPower;
             sharedMetrics.dataReady = true;
-            Serial.printf("[BLE] MPPT updated: %.0fW\n", sharedMetrics.power);
         }
     }
 }
@@ -90,44 +93,62 @@ void my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
     }
 }
 
+// Low-level helper function to execute clean register configurations to the CH422G expander
+void writeCH422GRegister(uint8_t reg, uint8_t value) {
+    Wire.beginTransmission(CH422G_I2C_ADDR);
+    Wire.write(reg);
+    Wire.write(value);
+    byte err = Wire.endTransmission();
+    if (err != 0) {
+        Serial.printf("[HARDWARE ERROR] Failed writing to CH422G Reg 0x%02X. I2C Error Code: %d\n", reg, err);
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(1000); 
-    Serial.println("\n[SYSTEM] Initializing Waveshare 7-Inch Display Setup...");
+    Serial.println("\n[SYSTEM] Booting Waveshare 7-Inch Matrix Core...");
 
-    // 1. Fire up Backlight natively via PWM on GPIO 2 (Stops I2C timeouts)
-    Serial.println("[HARDWARE] Powering up Backlight Rail natively (GPIO 2)...");
-    pinMode(TFT_BL, OUTPUT);
-    digitalWrite(TFT_BL, HIGH);
-    ledcSetup(0, 300, 8);
-    ledcAttachPin(TFT_BL, 0);
-    ledcWrite(0, 255); // Force maximum brightness right away
+    // 1. Fire up unified shared I2C bus interface configuration
+    Serial.println("[HARDWARE] Instantiating Shared Master I2C Interface (Pins 8/9)...");
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN, 100000U);
 
-    // 2. Launch the RGB Parallel Panel Driver matrix
-    Serial.println("[HARDWARE] Starting RGB Parallel Matrix configuration...");
+    // 2. Perform Explicit CH422G Expansion Rail Sequencing
+    Serial.println("[HARDWARE] Configuring CH422G IO Expander Rails...");
+    
+    // Set EXIO direction/output config
+    // EXIO2 (Backlight Enable) -> HIGH
+    // EXIO1 (Touch Screen Reset Pin) -> HIGH
+    // EXIO6 (LCD_VDD_EN Display Matrix Power VCOM gate) -> HIGH
+    writeCH422GRegister(0x0E, 0xFF); 
+
+    Serial.println("[HARDWARE] Power rails latched. Waiting for panel stabilization...");
+    delay(100); // Give display driver matrix time to saturate rails
+
+    // 3. Drive panel setup sequence via RGB Parallel bus lines
+    Serial.println("[HARDWARE] Activating Arduino_GFX Panel Matrix...");
     gfx->begin(); 
-    Serial.println("[HARDWARE] GFX Controller initialized.");
-
-    // 3. Optional visual confirmation test
+    
+    // Run an instantaneous hardware color swap verification loop
     gfx->fillScreen(RED); delay(150);
     gfx->fillScreen(GREEN); delay(150);
     gfx->fillScreen(BLUE); delay(150);
     gfx->fillScreen(BLACK);
 
-    // 4. Fire up the layout framework engine
-    Serial.println("[SYSTEM] Starting LVGL graphics workspace...");
+    // 4. Initializing graphic structure layouts
+    Serial.println("[SYSTEM] Firing up LVGL Graphics Engine layer...");
     lv_init();
-
-    // 5. Connect touch layers
+    
+    // Connect touch structures over the active, shared 8/9 bus lines
+    Serial.println("[HARDWARE] Attaching GT911 Touch Controller Hooks...");
     touch_init();
 
     screenWidth = gfx->width();
     screenHeight = gfx->height();
-    Serial.printf("[DISPLAY] Resolution Reported: %dx%d\n", screenWidth, screenHeight);
 
     disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) {
-        Serial.println("[CRITICAL ERROR] Internal framework graphics memory allocation failed!");
+        Serial.println("[CRITICAL ERROR] Failed to claim memory buffer arrays. Halting.");
         while(1) delay(100);
     }
 
@@ -146,7 +167,7 @@ void setup() {
     indev_drv.read_cb = my_touchpad_read;
     lv_indev_drv_register(&indev_drv);
 
-    // Generate diagnostic UI text elements
+    // Define telemetry interface hooks
     lbl_battery = lv_label_create(lv_scr_act());
     lv_obj_set_style_text_font(lbl_battery, &lv_font_montserrat_14, 0); 
     lv_obj_align(lbl_battery, LV_ALIGN_CENTER, 0, -50);
@@ -157,15 +178,15 @@ void setup() {
     lv_obj_align(lbl_solar, LV_ALIGN_CENTER, 0, 50);
     lv_label_set_text(lbl_solar, "Waiting for MPPT BLE...");
 
-    // 6. Connect your background scanning infrastructure
-    Serial.println("[BLE] Registering target physical signatures...");
+    // 5. Connect Bluetooth Decryption Background Framework
+    Serial.println("[BLE] Arming background Victron decryption scanning cores...");
     victron.addDevice("SmartShunt", "aa:bb:cc:dd:ee:ff", "00112233445566778899aabbccddeeff");
     victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
     
     victron.setCallback(onVictronBleData);
     victron.begin(); 
     
-    Serial.println("[SYSTEM] Framework Engine up and processing loops cleanly.");
+    Serial.println("[SYSTEM] Initialization cycle fully completed.");
 }
 
 void loop() {
