@@ -1,11 +1,15 @@
 /*******************************************************************************
- * LVGL 7-Inch Waveshare Victron BLE Dashboard - Complete Working Core
- * Corrected Input Driver API, Memory Sequence & Shared I2C Control
+ * LVGL 7-Inch Waveshare Victron BLE Dashboard - Native C++ Pipeline
+ * Low CPU Overhead, Safe Integer Text Parsers, and Direct Struct Mapping
  ******************************************************************************/
 #include <lvgl.h>
 #include <Arduino_GFX_Library.h>
 #include <VictronBLE.h> 
 #include <Wire.h>
+
+// Clean, native C++ header mapping
+#include "ui.h"
+#include "vars.h"
 
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
@@ -29,15 +33,10 @@ Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
     1 /* pclk_active_neg */, 16000000 /* prefer_speed */, true /* auto_flush */);
 #endif 
 
+// Included AFTER gfx definition to prevent "not declared in this scope" macro compiler drops
 #include "touch.h"
 
-static uint32_t screenWidth;
-static uint32_t screenHeight;
-static lv_disp_draw_buf_t draw_buf;
-static lv_color_t *disp_draw_buf;
-static lv_disp_drv_t disp_drv;
-
-/* --- VICTRON INTEGRATION ENGINE --- */
+/* --- VICTRON BLE RADIO ENGINE --- */
 VictronBLE victron;
 
 struct VictronSharedState {
@@ -50,9 +49,6 @@ struct VictronSharedState {
     bool dataReady;
 };
 volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, 0, 0, false};
-
-lv_obj_t *lbl_battery;
-lv_obj_t *lbl_solar;
 
 void onVictronBleData(const VictronDevice* device) {
     if (device->dataValid) {
@@ -70,8 +66,8 @@ void onVictronBleData(const VictronDevice* device) {
         }
     }
 }
-/* --------------------------------- */
 
+/* --- DISPLAY & TOUCH INTERFACE CALLBACKS --- */
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
@@ -103,7 +99,9 @@ void writeCH422GRegister(uint8_t reg, uint8_t value) {
 void setup() {
     Serial.begin(115200);
     delay(1000); 
-    Serial.println("\n[SYSTEM] Booting Waveshare 7-Inch Matrix Core...");
+    Serial.println("[SYSTEM] Starting Native C++ Hardware Framework...");
+
+    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
     lv_init();
     touch_init();
@@ -114,25 +112,21 @@ void setup() {
     gfx->begin(); 
     gfx->fillScreen(BLACK);
 
-    // Prioritize BLE configuration initialization
-    Serial.println("[BLE] Arming background Victron decryption scanning cores...");
-    
-    // Remember to verify your real hardware MAC addresses and 32-character encryption keys match here:
-    victron.addDevice("SmartShunt", "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
+    victron.addDevice("SmartShunt", "aa:bb:cc:dd:ee:ff", "00112233445566778899aabbccddeeff");
     victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
-    
     victron.setCallback(onVictronBleData);
-    victron.setDebug(true); 
     victron.begin(); 
 
-    screenWidth = gfx->width();
-    screenHeight = gfx->height();
+    uint32_t screenWidth = gfx->width();
+    uint32_t screenHeight = gfx->height();
 
-    disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    lv_color_t *disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) { while(1) delay(100); }
 
+    static lv_disp_draw_buf_t draw_buf;
     lv_disp_draw_buf_init(&draw_buf, disp_draw_buf, NULL, screenWidth * screenHeight / 4);
 
+    static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
     disp_drv.hor_res = screenWidth;
     disp_drv.ver_res = screenHeight;
@@ -143,64 +137,68 @@ void setup() {
     static lv_indev_drv_t indev_drv;
     lv_indev_drv_init(&indev_drv);
     indev_drv.type = LV_INDEV_TYPE_POINTER;
-    indev_drv.read_cb = my_touchpad_read; // FIXED: Set to correct LVGL 8 API parameter
+    indev_drv.read_cb = my_touchpad_read; 
     lv_indev_drv_register(&indev_drv);
 
-    lbl_battery = lv_label_create(lv_scr_act());
-    lv_obj_set_style_text_font(lbl_battery, &lv_font_montserrat_14, 0); 
-    lv_obj_align(lbl_battery, LV_ALIGN_CENTER, 0, -40);
-
-    lbl_solar = lv_label_create(lv_scr_act());
-    lv_obj_set_style_text_font(lbl_solar, &lv_font_montserrat_14, 0); 
-    lv_obj_align(lbl_solar, LV_ALIGN_CENTER, 0, 40);
-
-    Serial.println("[SYSTEM] Initialization cycle fully completed.");
+    ui_init(); 
+    Serial.println("[SYSTEM] Custom PicoPixel layout configuration successfully loaded.");
 }
 
 void loop() {
-    victron.loop(); // Processes background over-the-air raw queues
-    lv_timer_handler(); 
-    
+    victron.loop();       
+    lv_timer_handler();   
+
     static uint32_t lastWidgetRefresh = 0;
-    if (millis() - lastWidgetRefresh > 5000) {
-        uint32_t uptimeSeconds = millis() / 1000;
+    if (millis() - lastWidgetRefresh > 5000) { 
+        
+        // Cache data safely using thread-isolated structural variables
+        VictronSharedState snap;
+        noInterrupts();
+        snap.voltage = sharedMetrics.voltage;
+        snap.current = sharedMetrics.current;
+        snap.soc     = sharedMetrics.soc;
+        snap.power   = sharedMetrics.power;
+        snap.shuntPacketsReceived = sharedMetrics.shuntPacketsReceived;
+        snap.mpptPacketsReceived  = sharedMetrics.mpptPacketsReceived;
+        interrupts();
 
-        // Pull out clean local variables
-        float currentVoltage = sharedMetrics.voltage;
-        float currentAmps    = sharedMetrics.current;
-        float currentSoc     = sharedMetrics.soc;
-        float currentPower   = sharedMetrics.power;
-        uint32_t rxShunt     = sharedMetrics.shuntPacketsReceived;
-        uint32_t rxMppt      = sharedMetrics.mpptPacketsReceived;
+        // Hoisted variables accessible by BOTH shunt and solar conditional blocks
+        int wholeVolts = (int)snap.voltage;
+        int milliVolts = (int)abs((int)((snap.voltage - wholeVolts) * 100));
 
-        // SmartShunt UI Update Logic
-        if (rxShunt > 0) {
-            // PURE LVGL: Multiply by 10 or 100 and print as integers to bypass 
-            // the missing float support in your lv_conf.h configuration
-            int wholeVolts = (int)currentVoltage;
-            int milliVolts = (int)((currentVoltage - wholeVolts) * 100);
+        // 1. POPULATE SMARTSHUNT METRICS 
+        if (snap.shuntPacketsReceived > 0) {
+            int wholeAmps  = (int)snap.current;
+            int milliAmps  = (int)abs((int)((snap.current - wholeAmps) * 100));
+            int wholeSoc   = (int)snap.soc;
+
+            lv_label_set_text_fmt(objects.dcvoltsdisplay, "%d.%02d", wholeVolts, milliVolts);
             
-            int wholeAmps  = (int)currentAmps;
-            int milliAmps  = (int)abs((int)((currentAmps - wholeAmps) * 100)); // Keep decimals positive
-            
-            int wholeSoc   = (int)currentSoc;
+            if (snap.current < 0.0f && wholeAmps == 0) {
+                lv_label_set_text_fmt(objects.dcamps, "-0.%02d", milliAmps);
+            } else {
+                lv_label_set_text_fmt(objects.dcamps, "%d.%02d", wholeAmps, milliAmps);
+            }
 
-            lv_label_set_text_fmt(lbl_battery, "SmartShunt: %d.%02dV | %d.%02dA | %d%% (%u rx)", 
-                                  wholeVolts, milliVolts, 
-                                  wholeAmps, milliAmps, 
-                                  wholeSoc, rxShunt);
-        } else {
-            lv_label_set_text_fmt(lbl_battery, "Scanning Shunt... Uptime: %u s", uptimeSeconds);
+            lv_label_set_text_fmt(objects.battery, "%d%%", wholeSoc);
+            lv_arc_set_value(objects.arc_1, wholeSoc);
         }
 
-        // MPPT UI Update Logic
-        if (rxMppt > 0) {
-            // Power is already a whole number Watt value
-            int wholePower = (int)currentPower;
-            lv_label_set_text_fmt(lbl_solar, "MPPT Charger: %d Watts (%u rx)", 
-                                  wholePower, rxMppt);
-        } else {
-            lv_label_set_text_fmt(lbl_solar, "Scanning MPPT... Uptime: %u s", uptimeSeconds);
+        // 2. POPULATE SMARTMPPT SOLAR METRICS
+        if (snap.mpptPacketsReceived > 0) {
+            int wholePower = (int)snap.power;
+            lv_label_set_text_fmt(objects.solarwattschange, "%d", wholePower);
+            
+            if (snap.voltage > 1.0f) {
+                float calculatedSolarAmps = snap.power / snap.voltage;
+                int sAmpsWhole = (int)calculatedSolarAmps;
+                int sAmpsMilli = (int)abs((int)((calculatedSolarAmps - sAmpsWhole) * 100));
+                
+                lv_label_set_text_fmt(objects.solaramps, "%d.%02d", sAmpsWhole, sAmpsMilli);
+                
+                // Now perfectly safe; wholeVolts and milliVolts exist in this block's outer scope!
+                lv_label_set_text_fmt(objects.solarvoltagevolts, "%d.%02d", wholeVolts, milliVolts);
+            }
         }
 
         lastWidgetRefresh = millis();
