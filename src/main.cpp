@@ -123,7 +123,7 @@ void setup() {
     if (screenWidth == 0 || screenWidth > 800) screenWidth = 800;
     if (screenHeight == 0 || screenHeight > 480) screenHeight = 480;
 
-    victron.addDevice("SmartShunt", "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
+    victron.addDevice("SmartShunt", "f0:39:8c:90:8a:7c", "ffb3aceac43e10589acab9aa85320e48");
     victron.addDevice("SmartMPPT",  "11:22:33:44:55:66", "ffeeddccbbaa99887766554433221100");
     victron.setCallback(onVictronBleData);
     victron.begin(); 

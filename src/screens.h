@@ -23,7 +23,7 @@ typedef struct _objects_t {
     lv_obj_t *loadampslabel;
     lv_obj_t *solarvoltslabel;
     lv_obj_t *loadslabel;
-    lv_obj_t *time_to_empty_label;
+    lv_obj_t *time_remaining_label;
     lv_obj_t *batterylevel;
     lv_obj_t *solarwlabel;
     lv_obj_t *dcvoltsdisplay;
@@ -38,6 +38,10 @@ typedef struct _objects_t {
     lv_obj_t *loadsvoltslabel;
     lv_obj_t *solarampslabel;
     lv_obj_t *dcdc_display;
+    lv_obj_t *solar_icon;
+    lv_obj_t *dcdcicon;
+    lv_obj_t *loadicon;
+
 } objects_t;
 
 extern objects_t objects;

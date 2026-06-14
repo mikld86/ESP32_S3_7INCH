@@ -14,6 +14,10 @@ objects_t objects;
 lv_obj_t *tick_value_change_obj;
 uint32_t active_theme_index = 0;
 
+#define ICON_SOLAR               "\xEE\x91\xB2"  // Sun icon
+#define ICON_DCDC                "\xEE\x84\xA2"  // Caret circle arrow icon
+#define ICON_LOADS               "\xEE\x8B\x9E"  // Lightning icon
+
 void create_screen_main() {
     lv_obj_t *obj = lv_obj_create(0);
     objects.main = obj;
@@ -38,7 +42,7 @@ void create_screen_main() {
             lv_label_set_text(obj, "ENERGY MONITOR");
         }
         {
-            // solar_display
+            // solar_data_box
             lv_obj_t *obj = lv_obj_create(parent_obj);
             objects.solar_display = obj;
             lv_obj_set_pos(obj, 19, 266);
@@ -74,7 +78,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 20, 96);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276475c22ce3, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Amps");
+                    lv_label_set_text(obj, "AMPS");
                 }
                 {
                     // solarwattschange
@@ -83,7 +87,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 20, 58);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276475c22ce3, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Watts");
+                    lv_label_set_text(obj, "WATTS");
                 }
                 {
                     // solarvoltslabel
@@ -92,10 +96,10 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 118, 141);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Volts");
+                    lv_label_set_text(obj, "VOLTS");
                 }
                 {
-                    // solarwlabel
+                    // solarwattlabel
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     objects.solarwlabel = obj;
                     lv_obj_set_pos(obj, 118, 67);
@@ -103,8 +107,15 @@ void create_screen_main() {
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "W");
                 }
+                {   //solar_icon
+                    lv_obj_t *icon_obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(icon_obj, 30, 13); // Positioned to the left of the text
+                    lv_obj_set_size(icon_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    lv_obj_set_style_text_font(icon_obj, &Phosphor_Energy, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(icon_obj, ICON_SOLAR);
+                } 
                 {
-                    // mppt
+                    // SOLAR_TITLE
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     objects.mppt = obj;
                     lv_obj_set_pos(obj, 62, 17);
@@ -120,18 +131,18 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 118, 103);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Amps");
+                    lv_label_set_text(obj, "AMPS");
                 }
             }
         }
         {
-            // time_to_empty_label
+            // time_remaining_label
             lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.time_to_empty_label = obj;
+            objects.time_remaining_label = obj;
             lv_obj_set_pos(obj, 284, 397);
             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
             lv_obj_set_style_text_font(obj, &font_f885947061f3803d80082776dbb5ffeb, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "Time To Empty");
+            lv_label_set_text(obj, "TIME REMAINING: --:--");
         }
         {
             // batterylevel
@@ -148,28 +159,31 @@ void create_screen_main() {
             {
                 lv_obj_t *parent_obj = obj;
                 {
-                    // battery
-                    lv_obj_t *obj = lv_label_create(parent_obj);
-                    objects.battery = obj;
-                    lv_obj_set_pos(obj, 125, 122);
-                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                    lv_obj_set_style_text_font(obj, &font_f885947061f3803d80082776dbb5ffeb, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "....%");
-                }
-                {
                     // arc_1
                     lv_obj_t *obj = lv_arc_create(parent_obj);
                     objects.arc_1 = obj;
-                    lv_obj_set_pos(obj, 13, 13);
+                    lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+                    lv_obj_set_pos(obj, 0, 0);
                     lv_obj_set_size(obj, 250, 250);
                     lv_arc_set_bg_angles(obj, 135, 45);
                     lv_arc_set_range(obj, 0, 100);
                     lv_arc_set_value(obj, 50);
                 }
+                {
+                // batterylevelpercent
+                lv_obj_t *obj = lv_label_create(parent_obj);
+                    objects.battery = obj;
+                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    lv_obj_set_style_text_font(obj, &font_f885947061f3803d80082776dbb5ffeb, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_label_set_text(obj, "....%");
+    
+    // Dynamically centers the text within the bounds of the arc
+    lv_obj_align_to(obj, objects.arc_1, LV_ALIGN_CENTER, 0, 0);
+}
             }
         }
         {
-            // loaddisplaycontainer
+            // load_data_box
             lv_obj_t *obj = lv_obj_create(parent_obj);
             objects.loaddisplaycontainer = obj;
             lv_obj_set_pos(obj, 574, 143);
@@ -214,7 +228,14 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 117, 106);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Amps");
+                    lv_label_set_text(obj, "AMPS");
+                }
+                {// LOADS ICON
+                    lv_obj_t *icon_obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(icon_obj, 24, 15);
+                    lv_obj_set_size(icon_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    lv_obj_set_style_text_font(icon_obj, &Phosphor_Energy, LV_PART_MAIN | LV_STATE_DEFAULT); // FIXED NAME
+                    lv_label_set_text(icon_obj, ICON_LOADS);
                 }
                 {
                     // loadslabel
@@ -235,7 +256,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 21, 100);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276475c22ce3, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Amps");
+                    lv_label_set_text(obj, "AMPS");
                 }
                 {
                     // loadsvoltsdisplay
@@ -244,7 +265,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 31, 147);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276475c22ce3, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Volts");
+                    lv_label_set_text(obj, "VOLTS");
                 }
                 {
                     // loadsvoltslabel
@@ -270,7 +291,7 @@ void create_screen_main() {
             lv_label_set_text(obj, "VICTRON");
         }
         {
-            // dcdc_display
+            // dcdc_data_box
             lv_obj_t *obj = lv_obj_create(parent_obj);
             objects.dcdc_display = obj;
             lv_obj_set_pos(obj, 19, 50);
@@ -297,7 +318,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 131, 114);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Amps");
+                    lv_label_set_text(obj, "AMPS");
                 }
                 {
                     // dcvolts
@@ -306,7 +327,7 @@ void create_screen_main() {
                     lv_obj_set_pos(obj, 131, 64);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d800827698f876eb1, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Volts");
+                    lv_label_set_text(obj, "VOLTS");
                 }
                 {
                     // dcvoltsdisplay
@@ -317,11 +338,18 @@ void create_screen_main() {
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276475c22ce3, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "DCVolts");
                 }
+                {// DCDC ICON
+                    lv_obj_t *icon_obj = lv_label_create(parent_obj);
+                    lv_obj_set_pos(icon_obj, 30, 16);
+                    lv_obj_set_size(icon_obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                    lv_obj_set_style_text_font(icon_obj, &Phosphor_Energy, LV_PART_MAIN | LV_STATE_DEFAULT); 
+                    lv_label_set_text(icon_obj, ICON_DCDC);
+                }
                 {
-                    // dc_dc
+                    // dc_dc title
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     objects.dc_dc = obj;
-                    lv_obj_set_pos(obj, 66, 16);
+                    lv_obj_set_pos(obj, 70, 16);
                     lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                     lv_obj_set_style_text_font(obj, &font_f885947061f3803d8008276894e81300, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "DCDC");
@@ -370,7 +398,7 @@ void delete_screen_main() {
     objects.solarwlabel = 0;
     objects.mppt = 0;
     objects.solarampslabel = 0;
-    objects.time_to_empty_label = 0;
+    objects.time_remaining_label = 0;
     objects.batterylevel = 0;
     objects.battery = 0;
     objects.arc_1 = 0;

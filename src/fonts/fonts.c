@@ -16,5 +16,6 @@ const lv_font_t* ui_get_font_by_name(const char* name) {
     if (strcmp(name, "font_f885947061f3803d800827698f876eb1") == 0) return &font_f885947061f3803d800827698f876eb1;
     if (strcmp(name, "font_f885947061f3803d8008276d49550933") == 0) return &font_f885947061f3803d8008276d49550933;
     if (strcmp(name, "font_f885947061f3803d80082776dbb5ffeb") == 0) return &font_f885947061f3803d80082776dbb5ffeb;
+    if (strcmp(name, "Phosphor_Energy") == 0) return &Phosphor_Energy;
     return NULL;
 }

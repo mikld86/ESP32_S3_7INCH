@@ -14,6 +14,7 @@ extern const lv_font_t font_f885947061f3803d8008276894e81300;
 extern const lv_font_t font_f885947061f3803d800827698f876eb1;
 extern const lv_font_t font_f885947061f3803d8008276d49550933;
 extern const lv_font_t font_f885947061f3803d80082776dbb5ffeb;
+extern const lv_font_t Phosphor_Energy;
 
 /* Get a custom font by name, returns NULL if not found */
 const lv_font_t* ui_get_font_by_name(const char* name);
