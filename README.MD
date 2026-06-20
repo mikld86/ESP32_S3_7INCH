@@ -1,3 +1,3 @@
 This is a working LVGL example of a basic energy monitor for use with VictronBLE Devices.
 Own LVGL v8 Design in SquareLine.
-Forked from ESP32_S3_7INCH_LVGL_DEMO, with updates to the PINS and drivers for the Waveshare ESP32-S3-TOPUCH-LCD-7 v1.2
+Forked from ESP32_S3_7INCH_LVGL_DEMO, with updates to the PINS and drivers for the Waveshare ESP32-S3-TOUCH-LCD-7 v1.2
