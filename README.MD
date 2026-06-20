@@ -1,19 +1,2 @@
-# 7.0inch_ESP32-8048S070
-
-# Cappacitive 7 inches LCD 
-
-# youtube
-https://youtube.com/shorts/khs0KEFH_Zk?feature=share
-
-![Screenshot](/PICTURES/00.jpg)
-![Screenshot](/PICTURES/01.jpg)
-![Screenshot](/PICTURES/02.jpg)
-![Screenshot](/PICTURES/03.jpg)
-![Screenshot](/PICTURES/04.jpg)
-![Screenshot](/PICTURES/05.jpg)
-![Screenshot](/PICTURES/06.jpg)
-![Screenshot](/PICTURES/07.jpg)
-![Screenshot](/PICTURES/08.jpg)
-![Screenshot](/PICTURES/09.jpg)
-![Screenshot](/PICTURES/10.jpg)
-![Screenshot](/PICTURES/11.jpg)
+This is a working example of a basic energy monitor for use with VictronBLE Devices.
+Forked from ESP32_S3_7INCH_LVGL_DEMO, with updates to the PINS and drivers for the Waveshare ESP32-S3-TOPUCH-LCD-7 v1.2
