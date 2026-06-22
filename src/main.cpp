@@ -47,11 +47,16 @@ struct VictronSharedState {
     float current;
     float soc;
     float power;
+    int32_t remainingMinutes;
+    float dcdcVoltage;
+    float dcdcCurrent;
+    float dcdcPower;
     uint32_t shuntPacketsReceived;
     uint32_t mpptPacketsReceived;
+    uint32_t dcdcPacketsReceived;
     bool dataReady;
 };
-volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, 0, 0, false};
+volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0, false};
 
 void onVictronBleData(const VictronDevice* device) {
     if (device->dataValid) {
@@ -67,6 +72,13 @@ void onVictronBleData(const VictronDevice* device) {
             sharedMetrics.mpptPacketsReceived++;
             sharedMetrics.dataReady = true;
         }
+        else if (device->deviceType == DEVICE_TYPE_DCDC_CONVERTER) {
+            sharedMetrics.dcdcVoltage = device->dcdc.outputVoltage;
+            sharedMetrics.dcdcCurrent = device->dcdc.outputCurrent;
+            sharedMetrics.dcdcPower = sharedMetrics.dcdcVoltage * sharedMetrics.dcdcCurrent;
+            sharedMetrics.dcdcPacketsReceived++;
+            sharedMetrics.dataReady = true;
+}
     }
 }
 
@@ -166,8 +178,10 @@ void loop() {
         noInterrupts();
         snap.voltage = sharedMetrics.voltage;
         snap.current = sharedMetrics.current;
+        snap.remainingMinutes = sharedMetrics.remainingMinutes;
         snap.soc     = sharedMetrics.soc;
         snap.power   = sharedMetrics.power;
+        snap.dcdcPower = sharedMetrics.dcdcPower;
         snap.shuntPacketsReceived = sharedMetrics.shuntPacketsReceived;
         snap.mpptPacketsReceived  = sharedMetrics.mpptPacketsReceived;
         interrupts();
@@ -206,6 +220,12 @@ void loop() {
                 lv_label_set_text_fmt(objects.solaramps, "%d.%02d", sAmpsWhole, sAmpsMilli);
                 lv_label_set_text_fmt(objects.solarvoltagevolts, "%d.%02d", wholeVolts, milliVolts);
             }
+        }
+        // 2. POPULATE DCDC DATA
+            if (snap.dcdcPacketsReceived > 0) {
+                lv_label_set_text_fmt(objects.dcvoltsdisplay, "%.1f", snap.dcdcVoltage);
+            // Amps: %.1f for standard precision
+                lv_label_set_text_fmt(objects.dcamps, "%.1f", snap.dcdcCurrent);
         }
 
         lastWidgetRefresh = millis();
