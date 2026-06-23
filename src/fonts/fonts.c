@@ -11,11 +11,16 @@
 
 const lv_font_t* ui_get_font_by_name(const char* name) {
     if (name == NULL) return NULL;
+    if (strcmp(name, "font_7d2e5bb2e35f8000800837d08ca802bf") == 0) return &font_7d2e5bb2e35f8000800837d08ca802bf;
+    if (strcmp(name, "font_7d2e5bb2e35f8000800837d08ca802c0") == 0) return &font_7d2e5bb2e35f8000800837d08ca802c0;
+    if (strcmp(name, "font_7d2e5bb2e35f8000800837d08ca802c1") == 0) return &font_7d2e5bb2e35f8000800837d08ca802c1;
+    if (strcmp(name, "font_7d2e5bb2e35f8000800837d08ca802c2") == 0) return &font_7d2e5bb2e35f8000800837d08ca802c2;
+    if (strcmp(name, "font_7d2e5bb2e35f8000800837d08ca802c3") == 0) return &font_7d2e5bb2e35f8000800837d08ca802c3;
     if (strcmp(name, "font_f885947061f3803d8008276475c22ce3") == 0) return &font_f885947061f3803d8008276475c22ce3;
     if (strcmp(name, "font_f885947061f3803d8008276894e81300") == 0) return &font_f885947061f3803d8008276894e81300;
     if (strcmp(name, "font_f885947061f3803d800827698f876eb1") == 0) return &font_f885947061f3803d800827698f876eb1;
     if (strcmp(name, "font_f885947061f3803d8008276d49550933") == 0) return &font_f885947061f3803d8008276d49550933;
     if (strcmp(name, "font_f885947061f3803d80082776dbb5ffeb") == 0) return &font_f885947061f3803d80082776dbb5ffeb;
-    if (strcmp(name, "Phosphor_Energy") == 0) return &Phosphor_Energy;
+    if (strcmp(name, "font_f885947061f3803d8008277c1a1f4a2a") == 0) return &font_f885947061f3803d8008277c1a1f4a2a;
     return NULL;
 }

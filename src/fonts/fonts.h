@@ -9,12 +9,17 @@ extern "C" {
 #endif
 
 /* Custom font declarations (externally visible const structs, no init needed) */
+extern const lv_font_t font_7d2e5bb2e35f8000800837d08ca802bf;
+extern const lv_font_t font_7d2e5bb2e35f8000800837d08ca802c0;
+extern const lv_font_t font_7d2e5bb2e35f8000800837d08ca802c1;
+extern const lv_font_t font_7d2e5bb2e35f8000800837d08ca802c2;
+extern const lv_font_t font_7d2e5bb2e35f8000800837d08ca802c3;
 extern const lv_font_t font_f885947061f3803d8008276475c22ce3;
 extern const lv_font_t font_f885947061f3803d8008276894e81300;
 extern const lv_font_t font_f885947061f3803d800827698f876eb1;
 extern const lv_font_t font_f885947061f3803d8008276d49550933;
 extern const lv_font_t font_f885947061f3803d80082776dbb5ffeb;
-extern const lv_font_t Phosphor_Energy;
+extern const lv_font_t font_f885947061f3803d8008277c1a1f4a2a;
 
 /* Get a custom font by name, returns NULL if not found */
 const lv_font_t* ui_get_font_by_name(const char* name);

@@ -9,50 +9,37 @@ extern "C" {
 #endif
 
 typedef struct _objects_t {
-    lv_obj_t *main;
-    lv_obj_t *energymonitortitle;
-    lv_obj_t *loadwattslabel;
-    lv_obj_t *solarvoltagevolts;
-    lv_obj_t *dcdcampslabel;
-    lv_obj_t *solar_display;
-    lv_obj_t *loadwattsdisplay;
-    lv_obj_t *battery;
-    lv_obj_t *solaramps;
-    lv_obj_t *solarwattschange;
-    lv_obj_t *dcvolts;
-    lv_obj_t *loadampslabel;
-    lv_obj_t *solarvoltslabel;
-    lv_obj_t *loadslabel;
-    lv_obj_t *time_remaining_label;
-    lv_obj_t *batterylevel;
-    lv_obj_t *solarwlabel;
-    lv_obj_t *dcvoltsdisplay;
-    lv_obj_t *dc_dc;
-    lv_obj_t *loadamps;
-    lv_obj_t *loaddisplaycontainer;
-    lv_obj_t *arc_1;
-    lv_obj_t *victrontitlelabel;
-    lv_obj_t *mppt;
-    lv_obj_t *dcamps;
-    lv_obj_t *loadsvoltsdisplay;
-    lv_obj_t *loadsvoltslabel;
-    lv_obj_t *solarampslabel;
-    lv_obj_t *dcdc_display;
-    lv_obj_t *solar_icon;
-    lv_obj_t *dcdcicon;
-    lv_obj_t *loadicon;
-
+    lv_obj_t *screen_1;
+    lv_obj_t *solarvoltsdata;
+    lv_obj_t *icon_loads;
+    lv_obj_t *chargetypedata;
+    lv_obj_t *totalcharge;
+    lv_obj_t *loadscontainer;
+    lv_obj_t *image_1;
+    lv_obj_t *icon_temp;
+    lv_obj_t *timeremainingdata;
+    lv_obj_t *smartshuntlabel;
+    lv_obj_t *solardatacontainer;
+    lv_obj_t *mpptlabel;
+    lv_obj_t *icon_sun;
+    lv_obj_t *battery_bar;
+    lv_obj_t *icon_victron;
+    lv_obj_t *tempdata;
+    lv_obj_t *batterypercentdata;
+    lv_obj_t *loadsampsdata;
+    lv_obj_t *loadsvoltsdata;
+    lv_obj_t *solarampsdata;
 } objects_t;
 
 extern objects_t objects;
 
 enum ScreensEnum {
-    SCREEN_ID_MAIN = 1,
+    SCREEN_ID_SCREEN_1 = 1,
 };
 
-void create_screen_main();
-void tick_screen_main();
-void delete_screen_main();
+void create_screen_screen_1();
+void tick_screen_screen_1();
+void delete_screen_screen_1();
 
 void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);
