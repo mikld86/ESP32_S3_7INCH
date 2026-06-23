@@ -24,6 +24,22 @@
 TFT_eSPI tft = TFT_eSPI(); 
 XPT2046_Touchscreen touch(XPT2046_CS, XPT2046_IRQ);
 
+static const char* chargeStateName(uint8_t state) {
+    switch (state) {
+        case CHARGER_OFF:              return "OFF";
+        case CHARGER_LOW_POWER:        return "LOW POWER";
+        case CHARGER_FAULT:            return "FAULT";
+        case CHARGER_BULK:             return "BULK";
+        case CHARGER_ABSORPTION:       return "ABSORPTION"; 
+        case CHARGER_FLOAT:            return "FLOAT";
+        case CHARGER_STORAGE:          return "STORAGE";
+        case CHARGER_EQUALIZE:         return "EQUALIZE";
+        case CHARGER_INVERTING:        return "INVERTING";
+        case CHARGER_POWER_SUPPLY:     return "POwER SUPPLY";
+        case CHARGER_EXTERNAL_CONTROL: return "EXTERNAL CONTROL";
+        default:                       return "UNKNOWN";
+    }
+}
 /* --- VICTRON BLE RADIO ENGINE --- */
 VictronBLE victron;
 
@@ -33,6 +49,7 @@ struct VictronSharedState {
     float soc;
     float power;
     int32_t remainingMinutes;
+    uint8_t mpptState;
     uint32_t shuntPacketsReceived;
     uint32_t mpptPacketsReceived;
     bool dataReady;
@@ -56,6 +73,7 @@ void onVictronBleData(const VictronDevice* device) {
         }
     }
 }
+
 
 /* --- LVGL DISPLAY FLUSH (TFT_eSPI Optimized) --- */
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
@@ -202,6 +220,9 @@ void loop() {
                 
                 lv_label_set_text_fmt(objects.solarampsdata, "%d.%02d A", sAmpsWhole, sAmpsMilli);
                 lv_label_set_text_fmt(objects.solarvoltsdata, "%d.%02d V", wholeVolts, milliVolts);
+            }
+            if (objects.chargetypedata) {
+                lv_label_set_text(objects.chargetypedata, chargeStateName(snap.mpptState));
             }
         }
 
