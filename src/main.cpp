@@ -1,43 +1,28 @@
 /*******************************************************************************
- * LVGL 7-Inch Waveshare Victron BLE Dashboard - Native C++ Pipeline
- * Low CPU Overhead, Safe Integer Text Parsers, and Direct Struct Mapping
+ * LVGL 2.8-Inch CYD Victron BLE Dashboard 
  ******************************************************************************/
 #include <lvgl.h>
-#include <Arduino_GFX_Library.h>
+#include <TFT_eSPI.h>
+#include <XPT2046_Touchscreen.h>
 #include <VictronBLE.h> 
 #include <Wire.h>
 #include "secrets.h"
 
-// Clean, native C++ header mapping
+#define SCREEN_ID_MAIN SCREEN_ID_SCREEN_1 //fix screen ID conflict with generated screens.h
+// PicoPixel UI Header mappings
 #include "ui.h"
 #include "vars.h"
+#include "screens.h" 
 
-#define I2C_SDA_PIN 8
-#define I2C_SCL_PIN 9
-#define CH422G_I2C_ADDR 0x24
+#define CYD_BACKLIGHT_PIN 21
 
-#if defined(DISPLAY_DEV_KIT)
-Arduino_GFX *gfx = create_default_Arduino_GFX();
-#else 
-Arduino_ESP32RGBPanel *bus = new Arduino_ESP32RGBPanel(
-    GFX_NOT_DEFINED /* CS */, GFX_NOT_DEFINED /* SCK */, GFX_NOT_DEFINED /* SDA */,
-    5  /* DE */,  3 /* VSYNC */, 46 /* HSYNC */, 7 /* PCLK */,
-    1  /* R3 */, 2  /* R4 */, 42 /* R5 */, 41 /* R6 */, 40 /* R7 */, 
-    39 /* G2 */, 0  /* G3 */, 45 /* G4 */, 48 /* G5 */, 47 /* G6 */, 21 /* G7 */, 
-    14 /* B3 */, 38 /* B4 */, 18 /* B5 */, 17 /* B6 */, 10 /* B7 */  
-);
+// CYD Touchscreen Hardware SPI Pins
+#define XPT2046_CS   33
+#define XPT2046_IRQ  36
 
-// Standard Waveshare 7-Inch 800x480 Calibration Timings
-Arduino_RPi_DPI_RGBPanel *gfx = new Arduino_RPi_DPI_RGBPanel(
-    bus,
-    800 /* width */, 0 /* hsync_polarity */, 210 /* hsync_front_porch */, 30 /* hsync_pulse_width */, 16 /* hsync_back_porch */,
-    480 /* height */, 0 /* vsync_polarity */, 22 /* vsync_front_porch */, 13 /* vsync_pulse_width */, 10 /* vsync_back_porch */,
-    1 /* pclk_active_neg */, 16000000 /* prefer_speed */, true /* auto_flush */);
-
-#endif 
-
-// Included AFTER gfx definition to prevent "not declared in this scope" macro compiler drops
-#include "touch.h"
+// Instantiate Drivers
+TFT_eSPI tft = TFT_eSPI(); 
+XPT2046_Touchscreen touch(XPT2046_CS, XPT2046_IRQ);
 
 /* --- VICTRON BLE RADIO ENGINE --- */
 VictronBLE victron;
@@ -48,15 +33,11 @@ struct VictronSharedState {
     float soc;
     float power;
     int32_t remainingMinutes;
-    float dcdcVoltage;
-    float dcdcCurrent;
-    float dcdcPower;
     uint32_t shuntPacketsReceived;
     uint32_t mpptPacketsReceived;
-    uint32_t dcdcPacketsReceived;
     bool dataReady;
 };
-volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0, false};
+volatile VictronSharedState sharedMetrics = {0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, false};
 
 void onVictronBleData(const VictronDevice* device) {
     if (device->dataValid) {
@@ -64,85 +45,78 @@ void onVictronBleData(const VictronDevice* device) {
             sharedMetrics.voltage = device->battery.voltage;
             sharedMetrics.current = device->battery.current;
             sharedMetrics.soc     = device->battery.soc;
+            sharedMetrics.remainingMinutes = device->battery.remainingMinutes;
             sharedMetrics.shuntPacketsReceived++;
             sharedMetrics.dataReady = true;
         } 
         else if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) { 
-            sharedMetrics.power   = device->solar.panelPower;
+            sharedMetrics.power   = device->solar.panelPower; 
             sharedMetrics.mpptPacketsReceived++;
             sharedMetrics.dataReady = true;
         }
-        else if (device->deviceType == DEVICE_TYPE_DCDC_CONVERTER) {
-            sharedMetrics.dcdcVoltage = device->dcdc.outputVoltage;
-            sharedMetrics.dcdcCurrent = device->dcdc.outputCurrent;
-            sharedMetrics.dcdcPower = sharedMetrics.dcdcVoltage * sharedMetrics.dcdcCurrent;
-            sharedMetrics.dcdcPacketsReceived++;
-            sharedMetrics.dataReady = true;
-}
     }
 }
 
-/* --- DISPLAY & TOUCH INTERFACE CALLBACKS --- */
+/* --- LVGL DISPLAY FLUSH (TFT_eSPI Optimized) --- */
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
     uint32_t w = (area->x2 - area->x1 + 1);
     uint32_t h = (area->y2 - area->y1 + 1);
-#if (LV_COLOR_16_SWAP != 0)
-    gfx->draw16bitBeRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
-#else
-    gfx->draw16bitRGBBitmap(area->x1, area->y1, (uint16_t *)&color_p->full, w, h);
-#endif
+
+    tft.startWrite();
+    tft.setAddrWindow(area->x1, area->y1, w, h);
+    tft.pushColors((uint16_t *)&color_p->full, w * h, true);
+    tft.endWrite();
+
     lv_disp_flush_ready(disp);
 }
 
+/* --- LVGL TOUCHPAD READ (XPT2046 Optimized) --- */
 void my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data) {
-    if (touch_has_signal() && touch_touched()) {
+    if (touch.touched()) {
+        TS_Point p = touch.getPoint();
+        
+        // Basic calibration mapping for CYD landscape orientation (320x240)
+        int16_t x = map(p.x, 200, 3700, 0, 320);
+        int16_t y = map(p.y, 240, 3800, 0, 240);
+
         data->state = LV_INDEV_STATE_PR;
-        data->point.x = touch_last_x;
-        data->point.y = touch_last_y;
+        data->point.x = x;
+        data->point.y = y;
     } else {
         data->state = LV_INDEV_STATE_REL;
     }
 }
 
-void writeCH422GRegister(uint8_t reg, uint8_t value) {
-    Wire.beginTransmission(CH422G_I2C_ADDR);
-    Wire.write(reg);
-    Wire.write(value);
-    Wire.endTransmission();
-}
-
 void setup() {
     Serial.begin(115200);
     delay(1000); 
-    Serial.println("[SYSTEM] Starting Native C++ Hardware Framework...");
+    Serial.println("[SYSTEM] Starting TFT_eSPI + XPT2046 CYD Framework...");
 
-    Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+    // Turn display backlight on
+    pinMode(CYD_BACKLIGHT_PIN, OUTPUT);
+    digitalWrite(CYD_BACKLIGHT_PIN, HIGH); 
+
+    // Init Display
+    tft.init();
+    tft.setRotation(1); // Landscape orientation
+    tft.fillScreen(TFT_BLACK);
+
+    // Init Touch
+    touch.begin();
+    touch.setRotation(1);
 
     lv_init();
-    touch_init();
 
-    writeCH422GRegister(0x0E, 0xFF); 
-    delay(100); 
+    uint32_t screenWidth = 320;
+    uint32_t screenHeight = 240;
 
-    // Initialize hardware first
-    gfx->begin(); 
-    gfx->fillScreen(BLACK);
-
-    // FIXED: Calculate screen variables AFTER gfx->begin() has finished booting the hardware
-    uint32_t screenWidth = gfx->width();
-    uint32_t screenHeight = gfx->height();
-
-    // Fallback protection: Force exact specifications if driver dimensions report 0 or garbage
-    if (screenWidth == 0 || screenWidth > 800) screenWidth = 800;
-    if (screenHeight == 0 || screenHeight > 480) screenHeight = 480;
-
+    // We only register the devices that explicitly map to your UI variables
     victron.addDevice("SmartShunt", SmartShuntMAC, SmartShuntEncryptionKey);
     victron.addDevice("SmartMPPT",  SmartMPPTMAC, SmartMPPTEncryptionKey);
-    victron.addDevice("SmartDCDC", SmartDCDCMAC, SmartDCDCEncryptionKey);
     victron.setCallback(onVictronBleData);
     victron.begin(); 
 
-    // Buffer structure scales perfectly to the enforced boundaries
+    // Setup buffer structure for 320x240
     lv_color_t *disp_draw_buf = (lv_color_t *)heap_caps_malloc(sizeof(lv_color_t) * screenWidth * screenHeight / 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     if (!disp_draw_buf) { while(1) delay(100); }
 
@@ -164,7 +138,7 @@ void setup() {
     lv_indev_drv_register(&indev_drv);
 
     ui_init(); 
-    Serial.println("[SYSTEM] Custom PicoPixel layout configuration successfully loaded.");
+    Serial.println("[SYSTEM] PicoPixel Layout successfully attached via TFT_eSPI pipeline.");
 }
 
 void loop() {
@@ -181,7 +155,6 @@ void loop() {
         snap.remainingMinutes = sharedMetrics.remainingMinutes;
         snap.soc     = sharedMetrics.soc;
         snap.power   = sharedMetrics.power;
-        snap.dcdcPower = sharedMetrics.dcdcPower;
         snap.shuntPacketsReceived = sharedMetrics.shuntPacketsReceived;
         snap.mpptPacketsReceived  = sharedMetrics.mpptPacketsReceived;
         interrupts();
@@ -189,43 +162,47 @@ void loop() {
         int wholeVolts = (int)snap.voltage;
         int milliVolts = (int)abs((int)((snap.voltage - wholeVolts) * 100));
 
-        // 1. POPULATE SMARTSHUNT METRICS 
+        // 1. POPULATE SMARTSHUNT METRICS
         if (snap.shuntPacketsReceived > 0) {
             int wholeAmps  = (int)snap.current;
             int milliAmps  = (int)abs((int)((snap.current - wholeAmps) * 100));
             int wholeSoc   = (int)snap.soc;
 
-            lv_label_set_text_fmt(objects.loadsvoltsdisplay, "%d.%02d", wholeVolts, milliVolts);
+            lv_label_set_text_fmt(objects.loadsvoltsdata, "%d.%02d V", wholeVolts, milliVolts);
             
             if (snap.current < 0.0f && wholeAmps == 0) {
-                lv_label_set_text_fmt(objects.loadamps, "-0.%02d", milliAmps);
+                lv_label_set_text_fmt(objects.loadsampsdata, "-0.%02d A", milliAmps);
             } else {
-                lv_label_set_text_fmt(objects.loadamps, "%d.%02d", wholeAmps, milliAmps);
+                lv_label_set_text_fmt(objects.loadsampsdata, "%d.%02d A", wholeAmps, milliAmps);
             }
 
-            lv_label_set_text_fmt(objects.battery, "%d%%", wholeSoc);
-            lv_arc_set_value(objects.arc_1, wholeSoc);
+            lv_label_set_text_fmt(objects.batterypercentdata, "%d%%", wholeSoc);
+            if (objects.battery_bar) {
+                lv_bar_set_value(objects.battery_bar, wholeSoc, LV_ANIM_ON);
+            }
+
+            if (snap.remainingMinutes == 0xFFFF || snap.remainingMinutes <= 0) {
+                lv_label_set_text(objects.timeremainingdata, "Inf.");
+            } else {
+                int hours = snap.remainingMinutes / 60;
+                int mins = snap.remainingMinutes % 60;
+                lv_label_set_text_fmt(objects.timeremainingdata, "%dh %dm", hours, mins);
+            }
         }
 
         // 2. POPULATE SMARTMPPT SOLAR METRICS
         if (snap.mpptPacketsReceived > 0) {
             int wholePower = (int)snap.power;
-            lv_label_set_text_fmt(objects.solarwattschange, "%d", wholePower);
+            lv_label_set_text_fmt(objects.totalcharge, "%d W", wholePower);
             
             if (snap.voltage > 1.0f) {
                 float calculatedSolarAmps = snap.power / snap.voltage;
                 int sAmpsWhole = (int)calculatedSolarAmps;
                 int sAmpsMilli = (int)abs((int)((calculatedSolarAmps - sAmpsWhole) * 100));
                 
-                lv_label_set_text_fmt(objects.solaramps, "%d.%02d", sAmpsWhole, sAmpsMilli);
-                lv_label_set_text_fmt(objects.solarvoltagevolts, "%d.%02d", wholeVolts, milliVolts);
+                lv_label_set_text_fmt(objects.solarampsdata, "%d.%02d A", sAmpsWhole, sAmpsMilli);
+                lv_label_set_text_fmt(objects.solarvoltsdata, "%d.%02d V", wholeVolts, milliVolts);
             }
-        }
-        // 2. POPULATE DCDC DATA
-            if (snap.dcdcPacketsReceived > 0) {
-                lv_label_set_text_fmt(objects.dcvoltsdisplay, "%.1f", snap.dcdcVoltage);
-            // Amps: %.1f for standard precision
-                lv_label_set_text_fmt(objects.dcamps, "%.1f", snap.dcdcCurrent);
         }
 
         lastWidgetRefresh = millis();
