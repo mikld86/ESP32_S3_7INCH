@@ -1,5 +1,5 @@
 /*******************************************************************************
- * LVGL Victron BLE Dashboard (NO TOUCH - STABLE BUILD)
+ * LVGL Victron BLE Dashboard (STABLE / FIXED)
  ******************************************************************************/
 
 #include <lvgl.h>
@@ -11,13 +11,15 @@
 #include "vars.h"
 #include "screens.h"
 
+#include <esp_timer.h>
+
 /* ---------------- DISPLAY ---------------- */
 TFT_eSPI tft;
 
 /* ---------------- VICTRON ---------------- */
 VictronBLE victron;
 
-/* ---------------- THREAD SAFE STATE ---------------- */
+/* ---------------- STATE ---------------- */
 portMUX_TYPE victronMux = portMUX_INITIALIZER_UNLOCKED;
 
 struct VictronSharedState {
@@ -26,16 +28,22 @@ struct VictronSharedState {
     float soc;
     float power;
     int32_t remainingMinutes;
-
     uint8_t mpptState;
-
     uint32_t shuntPackets;
     uint32_t mpptPackets;
-
     bool dataReady;
 };
 
 VictronSharedState sharedMetrics = {0};
+
+/* ---------------- SYSTEM FLAGS ---------------- */
+static bool uiReady = false;
+static bool lvglReady = false;
+
+/* ---------------- LVGL TICK ---------------- */
+static void lv_tick_task(void *arg) {
+    lv_tick_inc(1);
+}
 
 /* ---------------- DISPLAY FLUSH ---------------- */
 void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color_p) {
@@ -51,8 +59,10 @@ void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area, lv_color_t *color
     lv_disp_flush_ready(disp);
 }
 
-/* ---------------- UI UPDATE ---------------- */
+/* ---------------- SAFE UI UPDATE ---------------- */
 void updateUI(const VictronSharedState& s) {
+
+    if (!uiReady || !lvglReady) return;
 
     if (objects.loadsvoltsdata)
         lv_label_set_text_fmt(objects.loadsvoltsdata, "%0.2f V", s.voltage);
@@ -69,10 +79,9 @@ void updateUI(const VictronSharedState& s) {
     if (objects.totalcharge)
         lv_label_set_text_fmt(objects.totalcharge, "%d W", (int)s.power);
 
-    if (objects.chargetypedata) {
+    if (objects.chargetypedata)
         lv_label_set_text(objects.chargetypedata,
             (s.mpptState == 0) ? "OFF" : "ACTIVE");
-    }
 }
 
 /* ---------------- BLE CALLBACK ---------------- */
@@ -101,40 +110,62 @@ void onVictronBleData(const VictronDevice* device) {
     portEXIT_CRITICAL(&victronMux);
 }
 
-/* ---------------- SETUP ---------------- */
-void setup() {
+/* ---------------- INIT LVGL ---------------- */
+void initLVGL() {
 
-    Serial.begin(115200);
-    delay(500);
-
-    /* BACKLIGHT (toggle HIGH/LOW if blank screen) */
-    pinMode(21, OUTPUT);
-    digitalWrite(21, HIGH);
-
-    /* TFT INIT (ONLY ONCE) */
-    tft.init();
-    tft.setRotation(1);
-    tft.fillScreen(TFT_BLACK);
-
-    /* LVGL INIT (ONLY ONCE) */
     lv_init();
 
-    static lv_color_t buf[320 * 20];
+    static lv_color_t buf[320 * 40];
     static lv_disp_draw_buf_t draw_buf;
-    lv_disp_draw_buf_init(&draw_buf, buf, NULL, 320 * 20);
+    lv_disp_draw_buf_init(&draw_buf, buf, NULL, 320 * 40);
 
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
+
     disp_drv.hor_res = 320;
     disp_drv.ver_res = 240;
     disp_drv.flush_cb = my_disp_flush;
     disp_drv.draw_buf = &draw_buf;
+
     lv_disp_drv_register(&disp_drv);
 
-    /* UI (MUST NOT INIT HARDWARE) */
-    ui_init();
+    lvglReady = true;
+}
 
-    /* VICTRON */
+/* ---------------- SETUP ---------------- */
+void setup() {
+
+    Serial.begin(115200);
+    delay(300);
+
+    /* BACKLIGHT */
+    pinMode(21, OUTPUT);
+    digitalWrite(21, HIGH);
+
+    /* TFT INIT */
+    tft.init();
+    tft.setRotation(1);
+    tft.fillScreen(TFT_BLACK);
+    tft.setSwapBytes(true);
+
+    /* LVGL */
+    initLVGL();
+
+    /* LVGL TICK TIMER (CRITICAL) */
+    const esp_timer_create_args_t tick_timer_args = {
+        .callback = &lv_tick_task,
+        .name = "lv_tick"
+    };
+
+    esp_timer_handle_t tick_timer;
+    esp_timer_create(&tick_timer_args, &tick_timer);
+    esp_timer_start_periodic(tick_timer, 1000);
+
+    /* UI MUST BE AFTER LVGL */
+    ui_init();
+    uiReady = true;
+
+    /* BLE */
     victron.addDevice("SmartShunt", SmartShuntMAC, SmartShuntEncryptionKey);
     victron.addDevice("SmartMPPT", SmartMPPTMAC, SmartMPPTEncryptionKey);
     victron.setCallback(onVictronBleData);
@@ -145,6 +176,8 @@ void setup() {
 
 /* ---------------- LOOP ---------------- */
 void loop() {
+
+    if (!lvglReady) return;
 
     victron.loop();
     lv_timer_handler();
