@@ -115,15 +115,15 @@ void initLVGL() {
 
     lv_init();
 
-    static lv_color_t buf[320 * 40];
+    static lv_color_t buf[320 * 40] __attribute__((aligned(32)));
     static lv_disp_draw_buf_t draw_buf;
     lv_disp_draw_buf_init(&draw_buf, buf, NULL, 320 * 40);
 
     static lv_disp_drv_t disp_drv;
     lv_disp_drv_init(&disp_drv);
 
-    disp_drv.hor_res = 320;
-    disp_drv.ver_res = 240;
+    disp_drv.hor_res = 240;
+    disp_drv.ver_res = 320;
     disp_drv.flush_cb = my_disp_flush;
     disp_drv.draw_buf = &draw_buf;
 
