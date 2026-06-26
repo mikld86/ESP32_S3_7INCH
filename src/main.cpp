@@ -92,6 +92,19 @@ void updateUI(const VictronSharedState& s) {
         lv_bar_set_value(objects.battery_bar, (int)s.soc, LV_ANIM_ON);
     }
 
+    // Fixed: Added mapping for the time remaining field
+    if (objects.timeremainingdata) {
+        if (s.remainingMinutes == 0xFFFF || s.remainingMinutes < 0) {
+            lv_label_set_text(objects.timeremainingdata, "Infinite");
+        } else if (s.remainingMinutes > 59) {
+            snprintf(buf, sizeof(buf), "%dh %dm", (int)(s.remainingMinutes / 60), (int)(s.remainingMinutes % 60));
+            lv_label_set_text(objects.timeremainingdata, buf);
+        } else {
+            snprintf(buf, sizeof(buf), "%dm", (int)s.remainingMinutes);
+            lv_label_set_text(objects.timeremainingdata, buf);
+        }
+    }
+
     /* ---------------- SOLAR MPPT DATA ---------------- */
     if (objects.solarvoltsdata) {
         snprintf(buf, sizeof(buf), "%.2f V", (double)s.solarVolts);

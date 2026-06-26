@@ -130,15 +130,6 @@ void create_screen_screen_1() {
             lv_img_set_antialias(obj, true);
         }
         {
-            // timeremainingdata
-            lv_obj_t *obj = lv_label_create(parent_obj);
-            objects.timeremainingdata = obj;
-            lv_obj_set_pos(obj, 24, 187);
-            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-            lv_obj_set_style_text_font(obj, &font_7d2e5bb2e35f8000800837d08ca802bf, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_label_set_text(obj, "TIME REMAINING");
-        }
-        {
             // solardatacontainer
             lv_obj_t *obj = lv_obj_create(parent_obj);
             objects.solardatacontainer = obj;
@@ -219,6 +210,16 @@ void create_screen_screen_1() {
             lv_obj_set_style_bg_opa(obj, 255, LV_PART_INDICATOR | LV_STATE_DEFAULT);
             lv_obj_set_style_bg_opa(obj, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_arc_opa(obj, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+        }
+        {
+            // timeremainingdata
+            lv_obj_t *obj = lv_label_create(parent_obj);
+            objects.timeremainingdata = obj;
+            lv_obj_set_pos(obj, 24, 187);
+            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+            lv_obj_set_style_text_font(obj, &font_7d2e5bb2e35f8000800837d08ca802bf, LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_label_set_text(obj, "TIME REMAINING");
         }
         {
             // icon_victron
