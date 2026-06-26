@@ -30,9 +30,8 @@ struct VictronSharedState {
     int32_t remainingMinutes;
 
     // MPPT Metrics
-    float solarVolts;
-    float solarAmps;
-    float power;
+    float power;         // Live Watts
+    uint16_t yieldToday; // Wh Generated Today
     uint8_t mpptState;
 
     // Diagnostics
@@ -92,7 +91,6 @@ void updateUI(const VictronSharedState& s) {
         lv_bar_set_value(objects.battery_bar, (int)s.soc, LV_ANIM_ON);
     }
 
-    // Fixed: Added mapping for the time remaining field
     if (objects.timeremainingdata) {
         if (s.remainingMinutes == 0xFFFF || s.remainingMinutes < 0) {
             lv_label_set_text(objects.timeremainingdata, "Infinite");
@@ -106,13 +104,15 @@ void updateUI(const VictronSharedState& s) {
     }
 
     /* ---------------- SOLAR MPPT DATA ---------------- */
+    // Repurposed SolarVolts to show Panel Power (Watts)
     if (objects.solarvoltsdata) {
-        snprintf(buf, sizeof(buf), "%.2f V", (double)s.solarVolts);
+        snprintf(buf, sizeof(buf), "%d W", (int)s.power);
         lv_label_set_text(objects.solarvoltsdata, buf);
     }
 
+    // Repurposed SolarAmps to show Daily Yield (Watt-hours)
     if (objects.solarampsdata) {
-        snprintf(buf, sizeof(buf), "%.2f A", (double)s.solarAmps);
+        snprintf(buf, sizeof(buf), "%d Wh", s.yieldToday);
         lv_label_set_text(objects.solarampsdata, buf);
     }
 
@@ -144,8 +144,7 @@ void onVictronBleData(const VictronDevice* device) {
 
     if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) {
         sharedMetrics.power      = device->solar.panelPower;
-        sharedMetrics.solarVolts = device->solar.batteryVoltage;
-        sharedMetrics.solarAmps  = device->solar.batteryCurrent;
+        sharedMetrics.yieldToday = device->solar.yieldToday; // Captured from your library mapping
         sharedMetrics.mpptState  = device->solar.chargeState;
         sharedMetrics.mpptPackets++;
     }
