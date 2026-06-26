@@ -23,12 +23,19 @@ VictronBLE victron;
 portMUX_TYPE victronMux = portMUX_INITIALIZER_UNLOCKED;
 
 struct VictronSharedState {
+    // SmartShunt Metrics
     float voltage;
     float current;
     float soc;
-    float power;
     int32_t remainingMinutes;
+
+    // MPPT Metrics
+    float solarVolts;
+    float solarAmps;
+    float power;
     uint8_t mpptState;
+
+    // Diagnostics
     uint32_t shuntPackets;
     uint32_t mpptPackets;
     bool dataReady;
@@ -63,24 +70,48 @@ void updateUI(const VictronSharedState& s) {
 
     if (!uiReady || !lvglReady) return;
 
-    if (objects.loadsvoltsdata)
-        lv_label_set_text_fmt(objects.loadsvoltsdata, "%0.2f V", s.voltage);
+    char buf[32];
 
-    if (objects.loadsampsdata)
-        lv_label_set_text_fmt(objects.loadsampsdata, "%0.2f A", s.current);
+    /* ---------------- SMARTSHUNT DATA ---------------- */
+    if (objects.loadsvoltsdata) {
+        snprintf(buf, sizeof(buf), "%.2f V", (double)s.voltage);
+        lv_label_set_text(objects.loadsvoltsdata, buf);
+    }
 
-    if (objects.batterypercentdata)
-        lv_label_set_text_fmt(objects.batterypercentdata, "%d%%", (int)s.soc);
+    if (objects.loadsampsdata) {
+        snprintf(buf, sizeof(buf), "%.2f A", (double)s.current);
+        lv_label_set_text(objects.loadsampsdata, buf);
+    }
 
-    if (objects.battery_bar)
+    if (objects.batterypercentdata) {
+        snprintf(buf, sizeof(buf), "%d%%", (int)s.soc);
+        lv_label_set_text(objects.batterypercentdata, buf);
+    }
+
+    if (objects.battery_bar) {
         lv_bar_set_value(objects.battery_bar, (int)s.soc, LV_ANIM_ON);
+    }
 
-    if (objects.totalcharge)
-        lv_label_set_text_fmt(objects.totalcharge, "%d W", (int)s.power);
+    /* ---------------- SOLAR MPPT DATA ---------------- */
+    if (objects.solarvoltsdata) {
+        snprintf(buf, sizeof(buf), "%.2f V", (double)s.solarVolts);
+        lv_label_set_text(objects.solarvoltsdata, buf);
+    }
 
-    if (objects.chargetypedata)
+    if (objects.solarampsdata) {
+        snprintf(buf, sizeof(buf), "%.2f A", (double)s.solarAmps);
+        lv_label_set_text(objects.solarampsdata, buf);
+    }
+
+    if (objects.totalcharge) {
+        snprintf(buf, sizeof(buf), "%d W", (int)s.power);
+        lv_label_set_text(objects.totalcharge, buf);
+    }
+
+    if (objects.chargetypedata) {
         lv_label_set_text(objects.chargetypedata,
             (s.mpptState == 0) ? "OFF" : "ACTIVE");
+    }
 }
 
 /* ---------------- BLE CALLBACK ---------------- */
@@ -99,8 +130,10 @@ void onVictronBleData(const VictronDevice* device) {
     }
 
     if (device->deviceType == DEVICE_TYPE_SOLAR_CHARGER) {
-        sharedMetrics.power = device->solar.panelPower;
-        sharedMetrics.mpptState = device->solar.chargeState;
+        sharedMetrics.power      = device->solar.panelPower;
+        sharedMetrics.solarVolts = device->solar.batteryVoltage;
+        sharedMetrics.solarAmps  = device->solar.batteryCurrent;
+        sharedMetrics.mpptState  = device->solar.chargeState;
         sharedMetrics.mpptPackets++;
     }
 
