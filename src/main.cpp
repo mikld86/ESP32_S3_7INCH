@@ -193,7 +193,7 @@ void setup() {
 
     /* TFT INIT */
     tft.init();
-    tft.setRotation(0);
+    tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
     tft.setSwapBytes(true);
 
